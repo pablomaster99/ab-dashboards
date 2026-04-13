@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matcha and CO - AB Test Dashboards</title>
+    <style>
+        :root { --green: #4a7c59; --bg: #f8f7f4; --card-bg: #fff; --text: #2d2d2d; --muted: #6b7280; --border: #e5e7eb; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; max-width: 900px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+        .report-list { list-style: none; }
+        .report-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.15s; }
+        .report-item:hover { border-color: var(--green); }
+        .report-item a { text-decoration: none; color: var(--text); font-weight: 500; font-size: 0.95rem; }
+        .report-meta { display: flex; gap: 1rem; align-items: center; }
+        .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 500; }
+        .badge-winner { background: #dcfce7; color: #166534; }
+        .badge-inconclusive { background: #fef3c7; color: #92400e; }
+        .badge-loser { background: #fee2e2; color: #991b1b; }
+        .date { color: var(--muted); font-size: 0.8rem; }
+        .empty { text-align: center; padding: 3rem; color: var(--muted); }
+    </style>
+</head>
+<body>
+    <h1>Matcha and CO - AB Test Dashboards</h1>
+    <p class="subtitle">Reportes interactivos de experimentacion - Intelligems</p>
+    <div id="reports-container">
+        <p class="empty">Cargando reportes...</p>
+    </div>
+    <script>
+        const reports = [];
+        const container = document.getElementById('reports-container');
+        if (reports.length === 0) {
+            container.innerHTML = '<p class="empty">No hay reportes todavia. Se agregaran automaticamente al generar dashboards con el skill ab-report.</p>';
+        } else {
+            const badgeClass = { winner: 'badge-winner', inconclusive: 'badge-inconclusive', loser: 'badge-loser' };
+            const badgeLabel = { winner: 'Winner', inconclusive: 'Inconclusive', loser: 'Loser' };
+            const grouped = {};
+            reports.sort(function(a, b) { return b.date.localeCompare(a.date); });
+            reports.forEach(function(r) {
+                var ym = r.date.substring(0, 7);
+                if (!grouped[ym]) grouped[ym] = [];
+                grouped[ym].push(r);
+            });
+            var html = '';
+            Object.keys(grouped).sort().reverse().forEach(function(ym) {
+                var parts = ym.split('-');
+                var monthName = new Date(parts[0], parseInt(parts[1]) - 1).toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                html += '<h3 style="margin:1.5rem 0 .75rem;font-size:.9rem;color:var(--muted);text-transform:capitalize">' + monthName + '</h3><ul class="report-list">';
+                grouped[ym].forEach(function(r) {
+                    html += '<li class="report-item"><a href="' + r.file + '">' + r.code + ' - ' + r.name + '</a><div class="report-meta"><span class="badge ' + (badgeClass[r.result] || 'badge-inconclusive') + '">' + (badgeLabel[r.result] || r.result) + '</span><span class="date">' + r.date + '</span></div></li>';
+                });
+                html += '</ul>';
+            });
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
