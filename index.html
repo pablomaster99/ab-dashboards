@@ -30,7 +30,7 @@
         <p class="empty">Cargando reportes...</p>
     </div>
     <script>
-        const reports = [];
+        const reports = [{ code: "MAC-015", name: "Volume Discount Buy Box", result: "inconclusive", date: "2026-04-21", file: "MAC-015-volume-discount-buybox.html" }];
         const container = document.getElementById('reports-container');
         if (reports.length === 0) {
             container.innerHTML = '<p class="empty">No hay reportes todavia. Se agregaran automaticamente al generar dashboards con el skill ab-report.</p>';
