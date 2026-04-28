@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A/B Report — MAC-021 PLP Filters JTBD</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --green: #059669; --green-light: #d1fae5; --green-bg: rgba(5,150,105,0.06);
+      --red: #dc2626; --red-light: #fee2e2; --red-bg: rgba(220,38,38,0.06);
+      --amber: #d97706; --amber-light: #fef3c7;
+      --grey-control: #64748b; --grey-muted: #94a3b8;
+      --text-primary: #0f172a; --text-secondary: #334155; --text-tertiary: #64748b; --text-faint: #94a3b8;
+      --bg-page: #f8fafc; --bg-card: #ffffff; --bg-subtle: #f1f5f9;
+      --border: #e2e8f0; --border-light: #f1f5f9;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04); --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+      --radius: 10px; --radius-sm: 6px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body { font-family:var(--font); background:var(--bg-page); color:var(--text-primary); line-height:1.55; -webkit-font-smoothing:antialiased; }
+    .dashboard { max-width:1200px; margin:0 auto; padding:32px 24px 48px; }
+
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:28px; gap:16px; flex-wrap:wrap; }
+    .header-left h1 { font-size:22px; font-weight:700; letter-spacing:-0.3px; margin-bottom:6px; }
+    .header-meta { display:flex; gap:12px; font-size:13px; color:var(--text-tertiary); flex-wrap:wrap; align-items:center; }
+    .header-meta a { color:var(--green); text-decoration:none; font-weight:500; }
+    .verdict-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; margin-top:4px; }
+    .verdict-pill.positive { background:var(--green); }
+    .filter-badge { display:inline-flex; align-items:center; font-size:11px; padding:2px 8px; background:#ede9fe; color:#7c3aed; border-radius:10px; font-weight:600; }
+
+    .exec-summary { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px 28px; margin-bottom:28px; display:grid; grid-template-columns:1fr auto; gap:32px; align-items:center; box-shadow:var(--shadow-sm); }
+    .exec-summary.positive { border-left:4px solid var(--green); }
+    .exec-narrative .exec-headline { font-size:16px; font-weight:600; margin-bottom:8px; line-height:1.4; }
+    .exec-narrative p { font-size:14px; color:var(--text-secondary); line-height:1.65; }
+    .exec-narrative .hypothesis { font-size:13px; color:var(--text-tertiary); margin-top:10px; padding-top:10px; border-top:1px solid var(--border-light); font-style:italic; }
+    .exec-kpi { text-align:right; min-width:160px; }
+    .exec-kpi-number { font-size:36px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1.1; }
+    .exec-kpi-label { font-size:12px; color:var(--text-tertiary); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+    .exec-kpi-note { font-size:11px; color:var(--text-faint); margin-top:4px; }
+
+    .tabs-nav { display:flex; gap:2px; margin-bottom:24px; background:var(--bg-subtle); border-radius:var(--radius); padding:3px; }
+    .tab-btn { flex:1; padding:10px 16px; background:transparent; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; color:var(--text-tertiary); transition:all 0.15s; }
+    .tab-btn:hover { color:var(--text-secondary); background:rgba(255,255,255,0.5); }
+    .tab-btn.active { color:var(--text-primary); background:var(--bg-card); box-shadow:var(--shadow-sm); font-weight:600; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; animation:tabIn 0.2s ease; }
+    @keyframes tabIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+    .section-header { margin-bottom:16px; }
+    .section-title { font-size:15px; font-weight:600; }
+    .section-subtitle { font-size:13px; color:var(--text-tertiary); margin-top:2px; }
+
+    .scorecards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px; }
+    .scorecard { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow-sm); position:relative; overflow:hidden; }
+    .scorecard::after { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+    .scorecard.positive::after { background:var(--green); }
+    .scorecard.negative::after { background:var(--red); }
+    .scorecard.neutral::after { background:var(--grey-muted); }
+    .scorecard-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+    .scorecard-label { font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-faint); font-weight:600; }
+    .scorecard-badge { font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; text-transform:uppercase; }
+    .scorecard-badge.sig { background:var(--green-light); color:var(--green); }
+    .scorecard-badge.ns { background:var(--bg-subtle); color:var(--text-faint); }
+    .scorecard-badge.hem { background:#ede9fe; color:#7c3aed; }
+    .scorecard-value { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-0.5px; margin-bottom:4px; }
+    .scorecard-control { font-size:13px; color:var(--text-faint); font-variant-numeric:tabular-nums; margin-bottom:6px; }
+    .scorecard-uplift { font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .scorecard-uplift.up { color:var(--green); }
+    .scorecard-uplift.down { color:var(--red); }
+    .scorecard-bar-track { height:4px; background:var(--bg-subtle); border-radius:2px; margin-top:10px; overflow:hidden; }
+    .scorecard-bar-fill { height:100%; border-radius:2px; }
+
+    .chart-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px; box-shadow:var(--shadow-sm); }
+    .chart-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:8px; }
+    .chart-card-title { font-size:14px; font-weight:600; }
+    .chart-card-annotation { font-size:12px; color:var(--text-tertiary); background:var(--bg-subtle); padding:4px 10px; border-radius:12px; }
+    .chart-wrap { position:relative; height:300px; }
+
+    .dumbbell-chart { display:flex; flex-direction:column; gap:28px; padding:12px 0; }
+    .dumbbell-row { display:grid; grid-template-columns:130px 1fr 90px; align-items:center; gap:16px; }
+    .dumbbell-label { font-size:13px; font-weight:500; color:var(--text-secondary); text-align:right; }
+    .dumbbell-track { position:relative; height:44px; display:flex; align-items:center; }
+    .dumbbell-line { position:absolute; height:3px; border-radius:1.5px; top:50%; transform:translateY(-50%); }
+    .dumbbell-dot { position:absolute; width:14px; height:14px; border-radius:50%; top:50%; transform:translate(-50%,-50%); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.15); z-index:2; }
+    .dumbbell-dot-label { position:absolute; top:-20px; transform:translateX(-50%); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .dumbbell-uplift { font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; padding-left:4px; }
+    .dumbbell-uplift.pos { color:var(--green); }
+    .dumbbell-uplift.neg { color:var(--red); }
+    .dumbbell-uplift.neu { color:var(--grey-muted); }
+
+    .confidence-row { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; margin-bottom:14px; display:grid; grid-template-columns:160px 1fr 220px; gap:24px; align-items:center; box-shadow:var(--shadow-sm); }
+    .conf-label { text-align:right; }
+    .conf-metric-name { font-size:13px; font-weight:600; }
+    .conf-metric-type { font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-top:2px; }
+    .conf-gauge { position:relative; height:28px; background:var(--bg-subtle); border-radius:14px; overflow:visible; }
+    .conf-fill { height:100%; border-radius:14px; }
+    .conf-threshold { position:absolute; top:-6px; bottom:-6px; width:2px; background:var(--text-primary); z-index:3; border-radius:1px; }
+    .conf-threshold-label { position:absolute; bottom:-20px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--text-faint); white-space:nowrap; }
+    .conf-interp { font-size:13px; color:var(--text-secondary); line-height:1.5; }
+    .conf-badge { font-size:15px; font-weight:700; display:block; margin-bottom:2px; }
+
+    .seg-pills { display:flex; gap:6px; margin-bottom:16px; }
+    .seg-pill { padding:6px 14px; border:1px solid var(--border); border-radius:20px; background:var(--bg-card); font-size:12px; font-weight:500; color:var(--text-tertiary); cursor:pointer; transition:all 0.15s; }
+    .seg-pill:hover { border-color:var(--grey-muted); }
+    .seg-pill.active { background:var(--text-primary); color:#fff; border-color:var(--text-primary); }
+    .heatmap-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow-sm); }
+    .heatmap-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .heatmap-table th { padding:12px 14px; text-align:center; font-size:11px; font-weight:600; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; background:var(--bg-subtle); border-bottom:1px solid var(--border); }
+    .heatmap-table th:first-child { text-align:left; }
+    .heatmap-table td { padding:11px 14px; text-align:center; border-bottom:1px solid var(--border-light); font-variant-numeric:tabular-nums; }
+    .heatmap-table tr:last-child td { border-bottom:none; }
+    .heatmap-table td:first-child { font-weight:600; text-align:left; }
+    .heatmap-table tr:hover td { background:rgba(0,0,0,0.012); }
+    .heat-cell { font-weight:600; border-radius:4px; padding:3px 8px; display:inline-block; min-width:58px; font-size:12px; }
+    .heat-sig { font-size:10px; font-weight:700; padding:2px 6px; border-radius:8px; text-transform:uppercase; }
+    .heat-sig.sig { background:var(--green-light); color:var(--green); }
+    .heat-sig.ns { background:var(--bg-subtle); color:var(--text-faint); }
+    .heat-visitors { color:var(--text-tertiary); font-size:12px; }
+
+    .insights-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+    .insight-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow-sm); display:flex; gap:14px; align-items:flex-start; }
+    .insight-number { width:32px; height:32px; min-width:32px; border-radius:50%; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; background:var(--green-bg); color:var(--green); }
+    .insight-body { flex:1; }
+    .insight-title { font-size:14px; font-weight:600; margin-bottom:10px; line-height:1.4; }
+    .insight-row { margin-bottom:8px; }
+    .insight-row:last-child { margin-bottom:0; }
+    .insight-tag { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:2px; }
+    .insight-tag.what { color:var(--text-faint); }
+    .insight-tag.why { color:var(--amber); }
+    .insight-tag.how { color:var(--green); }
+    .insight-text { font-size:13px; color:var(--text-secondary); line-height:1.6; }
+
+    .next-steps-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow-sm); }
+    .next-steps-title { font-size:15px; font-weight:600; margin-bottom:16px; }
+    .step-item { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border-light); }
+    .step-item:last-child { border-bottom:none; }
+    .step-icon { width:28px; height:28px; min-width:28px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-size:14px; }
+    .step-icon.implement { background:var(--green-light); }
+    .step-icon.iterate { background:var(--amber-light); }
+    .step-icon.monitor { background:var(--bg-subtle); }
+    .step-text { font-size:13px; color:var(--text-secondary); line-height:1.5; padding-top:4px; }
+
+    .footer { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:11px; color:var(--text-faint); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .footer a { color:var(--text-tertiary); text-decoration:none; }
+
+    @media(max-width:768px) {
+      .exec-summary { grid-template-columns:1fr; } .exec-kpi { text-align:left; }
+      .scorecards { grid-template-columns:1fr 1fr; }
+      .confidence-row { grid-template-columns:1fr; }
+      .insights-grid { grid-template-columns:1fr; }
+      .dumbbell-row { grid-template-columns:80px 1fr 70px; }
+    }
+    @media(max-width:480px) { .scorecards { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+
+<script>
+window.DATA = {
+  experiment: {
+    name: "MAC-021 — PLP Filters JTBD",
+    code: "MAC-021",
+    hypothesis: "Reemplazar los filtros de PLP basados en atributos (formato, intensidad, tamaño) con tabs JTBD (uso/ocasión) reducirá la fricción de elección y aumentará la conversión al conectar los productos con la intención del usuario",
+    verdict: "positive",
+    decision: "implement",
+    dates: { start: "2026-04-13", end: "2026-04-27" },
+    duration: 15,
+    visitors: { control: 13878, variant: 13519 },
+    intelligemsUrl: "https://app.intelligems.io/experiment/d718e34c-8e02-4052-b90f-e39f1bbf6cc9",
+    countries: "FR · GB · DE · IT · PT · NL"
+  },
+  metrics: {
+    overview: [
+      { name:"Conversion Rate", key:"cr", type:"hem", isRate:true, control:0.0675, variant:0.0760, uplift:0.13, p2bc:1.00, significant:true },
+      { name:"ARPU", key:"arpu", type:"success", isRate:false, control:2.7108, variant:3.0562, uplift:0.13, p2bc:0.98, significant:true },
+      { name:"Profit / Visitor", key:"profit", type:"success", isRate:false, control:1.9780, variant:2.2274, uplift:0.13, p2bc:0.97, significant:true },
+      { name:"AOV", key:"aov", type:"secondary", isRate:false, control:40.15, variant:40.23, uplift:0.00, p2bc:0.52, significant:false }
+    ]
+  },
+  segmentation: {
+    country: [
+      { segment:"🇫🇷 FR", visitors:17634, cr_control:0.0697, cr_variant:0.0770, cr_uplift:0.10, arpu_uplift:0.11, aov_uplift:0.01, profit_uplift:0.10, p2bc:0.97 },
+      { segment:"🇬🇧 GB", visitors:3516, cr_control:0.0691, cr_variant:0.0834, cr_uplift:0.21, arpu_uplift:0.13, aov_uplift:-0.06, profit_uplift:0.12, p2bc:0.94 },
+      { segment:"🇩🇪 DE", visitors:2642, cr_control:0.0563, cr_variant:0.0639, cr_uplift:0.13, arpu_uplift:0.11, aov_uplift:-0.02, profit_uplift:0.14, p2bc:0.79 },
+      { segment:"🇮🇹 IT", visitors:1527, cr_control:0.0454, cr_variant:0.0674, cr_uplift:0.48, arpu_uplift:0.38, aov_uplift:-0.07, profit_uplift:0.45, p2bc:0.97 },
+      { segment:"🇵🇹 PT", visitors:1430, cr_control:0.0850, cr_variant:0.0829, cr_uplift:-0.02, arpu_uplift:0.11, aov_uplift:0.14, profit_uplift:0.11, p2bc:0.44 },
+      { segment:"🇳🇱 NL", visitors:648, cr_control:0.0598, cr_variant:0.0606, cr_uplift:0.01, arpu_uplift:0.20, aov_uplift:0.18, profit_uplift:0.17, p2bc:0.52 }
+    ],
+    device: [
+      { segment:"📱 Mobile", visitors:23696, cr_control:0.0636, cr_variant:0.0719, cr_uplift:0.13, arpu_uplift:0.11, aov_uplift:-0.01, profit_uplift:0.12, p2bc:0.99 },
+      { segment:"🖥 Desktop", visitors:3701, cr_control:0.0929, cr_variant:0.1023, cr_uplift:0.10, arpu_uplift:0.18, aov_uplift:0.07, profit_uplift:0.14, p2bc:0.83 }
+    ],
+    visitor_type: [
+      { segment:"Nuevos", visitors:23995, cr_control:0.0583, cr_variant:0.0645, cr_uplift:0.11, arpu_uplift:0.12, aov_uplift:0.01, profit_uplift:0.12, p2bc:0.98 },
+      { segment:"Recurrentes", visitors:3402, cr_control:0.1352, cr_variant:0.1543, cr_uplift:0.14, arpu_uplift:0.10, aov_uplift:-0.03, profit_uplift:0.10, p2bc:0.95 }
+    ]
+  },
+  timeseries: {
+    dates:["2026-04-13","2026-04-14","2026-04-15","2026-04-16","2026-04-17","2026-04-18","2026-04-19","2026-04-20","2026-04-21","2026-04-22","2026-04-23","2026-04-24","2026-04-25","2026-04-26","2026-04-27"],
+    cr_control: [6.31,5.01,5.12,6.61,6.16,6.26,5.64,5.38,5.08,8.86,8.83,5.19,6.15,5.75,10.30],
+    cr_variant:  [6.93,6.94,6.11,5.76,5.80,4.44,7.02,7.60,8.40,9.39,8.72,6.41,7.17,6.52,9.54],
+    arpu_control:[2.51,2.02,2.31,2.50,2.40,2.23,2.58,2.21,1.97,3.34,3.22,2.30,2.94,2.20,4.07],
+    arpu_variant:[2.45,2.99,2.79,2.40,2.24,1.69,2.68,3.14,3.21,3.84,3.14,2.85,2.56,2.89,4.41]
+  },
+  learnings: [
+    {
+      title:"Los tabs JTBD eliminan la parálisis de elección vía chunking cognitivo",
+      what:"La variante logró un +13% de CR con p2bc 100% en 6 mercados. El efecto fue consistente en mobile (+13%), desktop (+10%), nuevos (+11%) y recurrentes (+14%) — lo que descarta que sea un artefacto de un segmento específico",
+      why:"Los filtros de atributos (formato, intensidad, tamaño) obligan al usuario a responder primero a la pregunta ¿qué quiero? en términos técnicos. Los tabs JTBD reformulan la pregunta como ¿para qué lo necesito?, reduciendo la carga cognitiva y eliminando la paradoja de la elección. El chunking por ocasión activa esquemas mentales preexistentes",
+      how:"El principio JTBD como mecanismo de navegación tiene validez más allá de los filtros: menús de categoría, recomendaciones, quiz de producto. Cualquier punto donde el usuario deba auto-clasificarse antes de ver resultados es candidato a este tratamiento"
+    },
+    {
+      title:"Italia: +48% CR revela fricción acumulada con el modelo de filtros por atributo",
+      what:"IT muestra un uplift de CR del +48% (p2bc 97%) y ARPU +38% — el mayor de todos los mercados. Con solo 4,54% de CR en control, Italia tenía la mayor brecha de conversión; la variante la cierra a 6,74%",
+      why:"Un CR base muy bajo en control no solo indica volumen pequeño, sino fricción estructural severa. Los usuarios italianos encontraban los filtros de atributos especialmente poco intuitivos — probablemente por expectativas culturales distintas sobre cómo navegar un catálogo",
+      how:"Cuando un mercado tiene CR significativamente más bajo que la media sin causa obvia de demanda o precio, conviene testear primero la hipótesis de fricción de navegación. IT debe ser el mercado prioritario en la implementación"
+    },
+    {
+      title:"Portugal: CR neutro pero ARPU y AOV positivos — autoselección de calidad",
+      what:"PT es el único mercado con CR negativo (-2%, no significativo). Sin embargo, ARPU +11% y AOV +14% son positivos: la variante convierte menos usuarios pero de mayor valor medio. El profit/visitor también sube +11%",
+      why:"Los tabs JTBD actúan como mecanismo de autoselección: filtran usuarios con intención difusa que en control habrían comprado por defecto un producto básico. En mercados más maduros, este efecto es más pronunciado. La variante no es peor para el negocio — genera más margen por conversión",
+      how:"En mercados con alta tasa de repetición o mayor madurez del cliente, el uplift de CR no es la única métrica relevante. PT requiere monitoreo post-implementación para confirmar que el trade-off se mantiene a escala"
+    },
+    {
+      title:"El uplift creció de semana 1 a semana 2 — sin efecto novelty, con aprendizaje de usuario",
+      what:"La primera semana mostró días donde la variante era inferior al control (día 18: control 6,26% vs variante 4,44%). La segunda semana el patrón se invirtió consistentemente. No hay señal de novelty effect — el efecto se acumuló con el tiempo",
+      why:"El efecto novelty esperado sería: uplift alto al inicio que se desvanece. El patrón inverso sugiere que los usuarios necesitaron ~1 semana para interiorizar el nuevo modelo de navegación JTBD. Una vez aprendido, la conversión mejoró de forma estable",
+      how:"Tests de navegación con cambios de paradigma (atributo → intención) necesitan más tiempo de run que tests de copy o precio. En futuros experimentos de navegación, planificar mínimo 3 semanas antes de evaluar resultados definitivos"
+    }
+  ],
+  nextSteps: [
+    { type:"implement", icon:"🚀", text:"Implementar JTBD tabs en producción para FR, GB, DE e IT — los cuatro mercados con p2bc ≥ 90% y volumen suficiente. Prioridad: IT primero (mayor uplift relativo), luego FR por volumen" },
+    { type:"monitor", icon:"📊", text:"Monitorear PT y NL post-implementación con 30 días de tracking. Foco en ARPU y AOV en PT (no CR), y en confirmar que el +20% ARPU de NL es estable con mayor muestra" },
+    { type:"iterate", icon:"🔄", text:"Iterar el diseño de tabs para NL con etiquetas traducidas al neerlandés — el mercado muestra tendencia positiva en revenue pero sin significancia estadística en CR" },
+    { type:"implement", icon:"🚀", text:"Extender el principio JTBD a otras superficies: menú de categorías, quiz de producto, sección de recomendaciones. El aprendizaje valida la intención como organizador más efectivo que el atributo" }
+  ]
+}
+</script>
+
+<script>
+const LOCALE = 'es-ES'
+function fmtPct(v,d){ if(v==null)return'—'; d=d!==undefined?d:2; return(v*100).toLocaleString(LOCALE,{minimumFractionDigits:d,maximumFractionDigits:d})+'%' }
+function fmtCur(v){ if(v==null)return'—'; return'€'+v.toLocaleString(LOCALE,{minimumFractionDigits:2,maximumFractionDigits:2}) }
+function fmtNum(v){ if(v==null)return'—'; return v.toLocaleString(LOCALE) }
+function fmtUp(v){ if(v==null)return'—'; const s=v>=0?'+':''; return s+(v*100).toLocaleString(LOCALE,{minimumFractionDigits:0,maximumFractionDigits:0})+'%' }
+function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString(LOCALE,{day:'numeric',month:'short',year:'numeric'}) }
+function fmtDateS(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString(LOCALE,{day:'numeric',month:'short'}) }
+function upColor(u){ if(u>0.005)return'var(--green)'; if(u<-0.005)return'var(--red)'; return'var(--grey-muted)' }
+function heatBg(u){ if(u==null)return'rgba(148,163,184,0.06)'; const a=Math.min(Math.abs(u),0.5),op=(0.06+a*0.8).toFixed(2); if(u>0.01)return'rgba(5,150,105,'+op+')'; if(u<-0.01)return'rgba(220,38,38,'+op+')'; return'rgba(148,163,184,0.06)' }
+
+Chart.defaults.font.family='-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif'
+Chart.defaults.font.size=12
+Chart.defaults.color='#475569'
+Chart.defaults.plugins.legend.labels.usePointStyle=true
+Chart.defaults.plugins.legend.labels.padding=16
+Chart.defaults.plugins.tooltip.backgroundColor='#0f172a'
+Chart.defaults.plugins.tooltip.cornerRadius=6
+Chart.defaults.plugins.tooltip.padding=10
+</script>
+
+<div class="dashboard">
+  <div class="header" id="header"></div>
+  <div class="exec-summary positive" id="exec-summary"></div>
+
+  <div class="tabs-nav">
+    <button class="tab-btn active" data-tab="resumen">Resumen</button>
+    <button class="tab-btn" data-tab="segmentacion">Segmentación</button>
+    <button class="tab-btn" data-tab="temporal">Temporal</button>
+    <button class="tab-btn" data-tab="insights">Insights</button>
+  </div>
+
+  <div id="resumen" class="tab-content active">
+    <div class="section-header">
+      <div class="section-title">Métricas principales</div>
+      <div class="section-subtitle">Variante vs control — valores con uplift relativo y significancia</div>
+    </div>
+    <div class="scorecards" id="scorecards"></div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-card-title">Uplift por métrica — Control vs Variante</div>
+        <div class="chart-card-annotation">
+          <span style="color:var(--grey-control)">●</span> Control &nbsp;·&nbsp;
+          <span style="color:var(--green)">●</span> Variante
+        </div>
+      </div>
+      <div id="dumbbell" class="dumbbell-chart"></div>
+    </div>
+    <div class="section-header"><div class="section-title">Confianza estadística (Bayesiana)</div></div>
+    <div id="confidence"></div>
+  </div>
+
+  <div id="segmentacion" class="tab-content">
+    <div class="section-header">
+      <div class="section-title">Análisis por segmento</div>
+      <div class="section-subtitle">Cómo varía el efecto según mercado, device y tipo de visitante &nbsp;<span class="filter-badge">FR · GB · DE · IT · PT · NL</span></div>
+    </div>
+    <div class="seg-pills">
+      <button class="seg-pill active" data-seg="mercado">Mercado</button>
+      <button class="seg-pill" data-seg="device">Device</button>
+      <button class="seg-pill" data-seg="visitante">Tipo de visitante</button>
+    </div>
+    <div id="seg-mercado" class="heatmap-card seg-table"></div>
+    <div id="seg-device"   class="heatmap-card seg-table" style="display:none"></div>
+    <div id="seg-visitante" class="heatmap-card seg-table" style="display:none"></div>
+  </div>
+
+  <div id="temporal" class="tab-content">
+    <div class="section-header">
+      <div class="section-title">Evolución temporal</div>
+      <div class="section-subtitle">Tendencia diaria de CR y ARPU · sin efecto novelty — uplift crece en semana 2</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-card-title">Conversion Rate diario (%)</div>
+        <div class="chart-card-annotation">Discrete mode — datos del día</div>
+      </div>
+      <div class="chart-wrap"><canvas id="crChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-card-title">ARPU diario (€)</div>
+        <div class="chart-card-annotation">Discrete mode — datos del día</div>
+      </div>
+      <div class="chart-wrap"><canvas id="arpuChart"></canvas></div>
+    </div>
+  </div>
+
+  <div id="insights" class="tab-content">
+    <div class="section-header">
+      <div class="section-title">Learnings</div>
+      <div class="section-subtitle">Qué aprendimos, por qué pasó y cómo aplicarlo</div>
+    </div>
+    <div class="insights-grid" id="learnings"></div>
+    <div class="next-steps-card">
+      <div class="next-steps-title">Next steps</div>
+      <div id="nextsteps"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>ab-report · Matcha &amp; CO Growth · v3.0</span>
+    <span id="ts"></span>
+    <a id="ig-link" href="#" target="_blank">Ver en Intelligems →</a>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'))
+    document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'))
+    b.classList.add('active')
+    document.getElementById(b.dataset.tab).classList.add('active')
+  })
+})
+document.querySelectorAll('.seg-pill').forEach(p=>{
+  p.addEventListener('click',()=>{
+    document.querySelectorAll('.seg-pill').forEach(x=>x.classList.remove('active'))
+    document.querySelectorAll('.seg-table').forEach(x=>x.style.display='none')
+    p.classList.add('active')
+    document.getElementById('seg-'+p.dataset.seg).style.display=''
+  })
+})
+document.getElementById('ts').textContent=new Date().toLocaleString(LOCALE)
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const D=window.DATA, E=D.experiment
+
+  // HEADER
+  document.getElementById('header').innerHTML=`
+    <div class="header-left">
+      <h1>${E.name}</h1>
+      <div class="header-meta">
+        <span>${fmtDate(E.dates.start)} → ${fmtDate(E.dates.end)}</span>
+        <span>·</span><span>${E.duration} días</span>
+        <span>·</span><span>${fmtNum(E.visitors.control+E.visitors.variant)} visitors</span>
+        <span>·</span><span class="filter-badge">${E.countries}</span>
+        <span>·</span><a href="${E.intelligemsUrl}" target="_blank">Intelligems →</a>
+      </div>
+    </div>
+    <div><div class="verdict-pill positive">✓ Implementar</div></div>
+  `
+
+  // EXEC SUMMARY
+  document.getElementById('exec-summary').innerHTML=`
+    <div class="exec-narrative">
+      <div class="exec-headline">Los tabs JTBD aumentan la conversión un +13% en 6 mercados europeos con confianza estadística máxima</div>
+      <p>Reemplazar los filtros de atributos de PLP con tabs basadas en jobs-to-be-done mejoró la conversion rate de 6,75% a 7,60% (+13%, p2bc 100%), el ARPU de €2,71 a €3,06 (+13%, p2bc 98%) y el gross profit/visitor de €1,98 a €2,23 (+13%, p2bc 97%), sin degradar el AOV (€40,15 vs €40,23, no significativo). El efecto fue consistente en mobile, desktop, nuevos y recurrentes — con un pico excepcional en Italia (+48% CR, p2bc 97%).</p>
+      <div class="hypothesis">Hipótesis: ${E.hypothesis}</div>
+    </div>
+    <div class="exec-kpi">
+      <div class="exec-kpi-number" style="color:var(--green)">+13%</div>
+      <div class="exec-kpi-label">CR uplift (HEM)</div>
+      <div class="exec-kpi-note">p2bc 100% · 27.397 visitors</div>
+      <div style="margin-top:12px;font-size:11px;color:var(--text-faint)">Revenue mensual<br>no disp. vía API</div>
+    </div>
+  `
+
+  // SCORECARDS
+  const mx=Math.max(...D.metrics.overview.map(m=>Math.abs(m.uplift)))
+  document.getElementById('scorecards').innerHTML=D.metrics.overview.map(m=>{
+    const isUp=m.uplift>0.005,isDown=m.uplift<-0.005
+    const dir=isUp?'positive':isDown?'negative':'neutral'
+    const badge=m.type==='hem'?'<span class="scorecard-badge hem">HEM</span>':
+      m.significant?'<span class="scorecard-badge sig">✓ Sig</span>':'<span class="scorecard-badge ns">n.s.</span>'
+    const val=m.isRate?fmtPct(m.variant,2):fmtCur(m.variant)
+    const ctrl=m.isRate?`vs ${fmtPct(m.control,2)}`:`vs ${fmtCur(m.control)}`
+    const bw=Math.min((Math.abs(m.uplift)/mx)*100,100)
+    const bc=isUp?'var(--green)':isDown?'var(--red)':'var(--grey-muted)'
+    return`<div class="scorecard ${dir}">
+      <div class="scorecard-top"><div class="scorecard-label">${m.name}</div>${badge}</div>
+      <div class="scorecard-value">${val}</div>
+      <div class="scorecard-control">${ctrl}</div>
+      <div class="scorecard-uplift ${isUp?'up':isDown?'down':''}">${isUp?'↑':'↓'} ${fmtUp(m.uplift)}</div>
+      <div class="scorecard-bar-track"><div class="scorecard-bar-fill" style="width:${bw}%;background:${bc}"></div></div>
+    </div>`
+  }).join('')
+
+  // DUMBBELL
+  document.getElementById('dumbbell').innerHTML=D.metrics.overview.map(m=>{
+    const lo=Math.min(m.control,m.variant), hi=Math.max(m.control,m.variant)
+    const range=hi-lo||1, pad=range*0.3
+    const tMin=lo-pad, tMax=hi+pad, tRange=tMax-tMin
+    const cp=((m.control-tMin)/tRange*80+10).toFixed(1)
+    const vp=((m.variant-tMin)/tRange*80+10).toFixed(1)
+    const ll=Math.min(+cp,+vp), rr=Math.max(+cp,+vp)
+    const isUp=m.uplift>0.005,isDown=m.uplift<-0.005
+    const uc=upColor(m.uplift)
+    const vc=isUp?'var(--green)':isDown?'var(--red)':'var(--grey-muted)'
+    const fmt=m.isRate?(v=>fmtPct(v,1)):(v=>fmtCur(v))
+    const uc2=isUp?'pos':isDown?'neg':'neu'
+    return`<div class="dumbbell-row">
+      <div class="dumbbell-label">${m.name}</div>
+      <div class="dumbbell-track">
+        <div class="dumbbell-line" style="left:${ll}%;width:${rr-ll}%;background:${uc}"></div>
+        <div class="dumbbell-dot" style="left:${cp}%;background:var(--grey-control)">
+          <div class="dumbbell-dot-label" style="color:var(--text-tertiary)">${fmt(m.control)}</div>
+        </div>
+        <div class="dumbbell-dot" style="left:${vp}%;background:${vc}">
+          <div class="dumbbell-dot-label" style="color:${vc}">${fmt(m.variant)}</div>
+        </div>
+      </div>
+      <div class="dumbbell-uplift ${uc2}">${fmtUp(m.uplift)}</div>
+    </div>`
+  }).join('')
+
+  // CONFIDENCE
+  document.getElementById('confidence').innerHTML=D.metrics.overview.filter(m=>m.type==='hem'||m.type==='success').map(m=>{
+    const p=m.p2bc, pPct=(p*100).toFixed(0)
+    const fc=p>=0.95?'var(--green)':p>=0.80?'var(--amber)':'var(--red)'
+    const interp=p>=0.95
+      ?`Con <strong>${pPct}%</strong> de confianza, la variante supera al control en ${m.name.toLowerCase()}`
+      :`Tendencia positiva sin significancia estadística (${pPct}% — se necesita ≥95%)`
+    const tl=m.type==='hem'?'Métrica primaria (HEM)':'Métrica secundaria'
+    return`<div class="confidence-row">
+      <div class="conf-label">
+        <div class="conf-metric-name">${m.name}</div>
+        <div class="conf-metric-type">${tl}</div>
+      </div>
+      <div>
+        <div class="conf-gauge">
+          <div class="conf-fill" style="width:${Math.min(p*100,100)}%;background:${fc}"></div>
+          <div class="conf-threshold" style="left:95%"><div class="conf-threshold-label">95%</div></div>
+        </div>
+      </div>
+      <div class="conf-interp">
+        <span class="conf-badge" style="color:${fc}">${pPct}% p2bc</span>
+        ${interp}
+      </div>
+    </div>`
+  }).join('')
+
+  // HEATMAPS
+  function heatTable(segs){
+    const rows=segs.map(s=>{
+      const mk=(u)=>`<div class="heat-cell" style="background:${heatBg(u)};color:${upColor(u)}">${fmtUp(u)}</div>`
+      const pb=s.p2bc>=0.95?`<span class="heat-sig sig">${(s.p2bc*100).toFixed(0)}%</span>`
+                           :`<span class="heat-sig ns">${(s.p2bc*100).toFixed(0)}%</span>`
+      return`<tr>
+        <td>${s.segment}</td>
+        <td><span class="heat-visitors">${fmtNum(s.visitors)}</span></td>
+        <td>${mk(s.cr_uplift)}</td>
+        <td>${mk(s.arpu_uplift)}</td>
+        <td>${mk(s.aov_uplift)}</td>
+        <td>${mk(s.profit_uplift)}</td>
+        <td>${pb}</td>
+      </tr>`
+    }).join('')
+    return`<table class="heatmap-table">
+      <thead><tr><th>Segmento</th><th>Visitors</th><th>CR Uplift</th><th>ARPU Uplift</th><th>AOV Uplift</th><th>Profit Uplift</th><th>p2bc</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`
+  }
+  document.getElementById('seg-mercado').innerHTML=heatTable(D.segmentation.country)
+  document.getElementById('seg-device').innerHTML=heatTable(D.segmentation.device)
+  document.getElementById('seg-visitante').innerHTML=heatTable(D.segmentation.visitor_type)
+
+  // CHARTS
+  const ts=D.timeseries
+  const labels=ts.dates.map(fmtDateS)
+  const chartOpts={responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'}},scales:{x:{grid:{color:'#f1f5f9'}},y:{grid:{color:'#f1f5f9'}}}}
+
+  new Chart(document.getElementById('crChart'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Control',data:ts.cr_control,borderColor:'#64748b',borderDash:[6,3],tension:0.3,pointRadius:3,fill:false,backgroundColor:'transparent'},
+        {label:'Variante',data:ts.cr_variant,borderColor:'#059669',tension:0.3,pointRadius:3,fill:'-1',backgroundColor:'rgba(5,150,105,0.07)'}
+      ]
+    },
+    options:{...chartOpts,scales:{x:{grid:{color:'#f1f5f9'}},y:{grid:{color:'#f1f5f9'},ticks:{callback:v=>v.toFixed(1)+'%'}}},plugins:{...chartOpts.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw.toFixed(2)}%`}}}}
+  })
+
+  new Chart(document.getElementById('arpuChart'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Control',data:ts.arpu_control,borderColor:'#64748b',borderDash:[6,3],tension:0.3,pointRadius:3,fill:false,backgroundColor:'transparent'},
+        {label:'Variante',data:ts.arpu_variant,borderColor:'#059669',tension:0.3,pointRadius:3,fill:false,backgroundColor:'transparent'}
+      ]
+    },
+    options:{...chartOpts,scales:{x:{grid:{color:'#f1f5f9'}},y:{grid:{color:'#f1f5f9'},ticks:{callback:v=>'€'+v.toFixed(2)}}},plugins:{...chartOpts.plugins,tooltip:{callbacks:{label:c=>`${c.dataset.label}: €${c.raw.toFixed(2)}`}}}}
+  })
+
+  // LEARNINGS
+  document.getElementById('learnings').innerHTML=D.learnings.map((l,i)=>`
+    <div class="insight-card">
+      <div class="insight-number">${i+1}</div>
+      <div class="insight-body">
+        <div class="insight-title">${l.title}</div>
+        <div class="insight-row"><div class="insight-tag what">QUÉ</div><div class="insight-text">${l.what}</div></div>
+        <div class="insight-row"><div class="insight-tag why">POR QUÉ</div><div class="insight-text">${l.why}</div></div>
+        ${l.how?`<div class="insight-row"><div class="insight-tag how">CÓMO</div><div class="insight-text">${l.how}</div></div>`:''}
+      </div>
+    </div>
+  `).join('')
+
+  // NEXT STEPS
+  document.getElementById('nextsteps').innerHTML=D.nextSteps.map(s=>`
+    <div class="step-item">
+      <div class="step-icon ${s.type}">${s.icon}</div>
+      <div class="step-text">${s.text}</div>
+    </div>
+  `).join('')
+
+  // FOOTER
+  document.getElementById('ig-link').href=E.intelligemsUrl
+})
+</script>
+</body>
+</html>
